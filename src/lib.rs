@@ -288,10 +288,16 @@ pub fn sunrise_and_set<F: FloatOps>(
         let untergang_lokal = 12.0 + zeitdifferenz - ra_d;
         let aufgang_welt = aufgang_lokal - geographische_laenge / 15.0;
         let untergang_welt = untergang_lokal - geographische_laenge / 15.0;
-        let jd_start = F::trunc(jd); // discard fraction of day
 
-        let aufgang_jd = (jd_start as f64) - 0.5 + (aufgang_welt / 24.0);
-        let untergang_jd = (jd_start as f64) - 0.5 + (untergang_welt / 24.0);
+        // discard fraction of day
+        let jd_start = if utc.hour() >= 12 {
+            F::trunc(jd)
+        } else {
+            F::trunc(jd) + 1.0
+        };
+
+        let aufgang_jd = jd_start - 0.5 + (aufgang_welt / 24.0);
+        let untergang_jd = jd_start - 0.5 + (untergang_welt / 24.0);
 
         //	let untergang_utc = untergang_lokal - geographische_laenge /15.0;
         let sunriseset = SunriseAndSet::Daylight(to_utc(aufgang_jd), to_utc(untergang_jd));
@@ -480,6 +486,38 @@ mod tests {
     fn test_sunrise_and_set() {
         let dt = Utc
             .with_ymd_and_hms(2005, 9, 30, 12, 0, 0)
+            .single()
+            .unwrap();
+
+        // geo-pos near Frankfurt/Germany
+        let lat = 50.0;
+        let lon = 10.0;
+
+        let sunriseandset = sunrise_and_set::<StdFloatOps>(dt, lat, lon).unwrap();
+
+        match sunriseandset {
+            SunriseAndSet::PolarDay => assert!(false),
+            SunriseAndSet::PolarNight => assert!(false),
+            SunriseAndSet::Daylight(sunrise, sunset) => {
+                assert_eq!(sunrise.year(), 2005);
+                assert_eq!(sunrise.month(), 9);
+                assert_eq!(sunrise.day(), 30);
+                assert_eq!(sunrise.hour(), 5);
+                assert_eq!(sunrise.minute(), 17);
+
+                assert_eq!(sunset.year(), 2005);
+                assert_eq!(sunset.month(), 9);
+                assert_eq!(sunset.day(), 30);
+                assert_eq!(sunset.hour(), 16);
+                assert_eq!(sunset.minute(), 59);
+            }
+        }
+    }
+
+    #[test]
+    fn test_sunrise_and_set_utc_before_12() {
+        let dt = Utc
+            .with_ymd_and_hms(2005, 9, 30, 11, 59, 59)
             .single()
             .unwrap();
 
